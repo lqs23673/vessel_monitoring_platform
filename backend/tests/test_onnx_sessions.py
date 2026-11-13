@@ -17,6 +17,8 @@ def test_fp32_sessions_disable_tf32_on_cuda_before_loading_libraries(monkeypatch
         captured['cuda_libraries_loaded'] = True
 
     def create_session(path, **kwargs):
+        if device == 'cuda':
+            assert captured['preloaded']
         captured.update(kwargs)
         return SimpleNamespace(get_providers=lambda: kwargs['providers'])
 
@@ -27,6 +29,7 @@ def test_fp32_sessions_disable_tf32_on_cuda_before_loading_libraries(monkeypatch
         SessionOptions=SimpleNamespace,
         GraphOptimizationLevel=SimpleNamespace(ORT_ENABLE_ALL=99),
         InferenceSession=create_session,
+        preload_dlls=lambda: captured.update(preloaded=True),
     ))
     onnx_backends._create_session(Path('model.onnx'), device)
     if device == 'cuda':
@@ -34,4 +37,5 @@ def test_fp32_sessions_disable_tf32_on_cuda_before_loading_libraries(monkeypatch
         assert captured['provider_options'] == [{'use_tf32': '0'}, {}]
     else:
         assert 'cuda_libraries_loaded' not in captured
+        assert 'preloaded' not in captured
         assert captured['provider_options'] is None

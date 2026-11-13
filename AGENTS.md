@@ -4,7 +4,7 @@
 
 - 本项目后续开发统一使用 Conda 虚拟环境 `Train`。
 - Python 命令、依赖安装、后端运行和测试均在 `Train` 环境中执行。
-- 本机解释器路径：`D:\app\miniconda3\envs\Train\python.exe`。
+- 本机解释器路径：`D:\conda_envs\Train\python.exe`（Conda 安装于 `C:\python\Anaconda3-2024.10-1-Windows-x86_64`）。
 - 可使用 `conda run -n Train <命令>`，或直接调用上述解释器。
 - 安装 Python 依赖时使用 `conda run -n Train python -m pip ...`。
 

@@ -103,6 +103,9 @@ def _create_session(onnx_path: Path, device: str):
             "onnxruntime is required for ONNX backends. "
             "Install with: pip install onnxruntime  (or onnxruntime-gpu)"
         ) from exc
+    if cuda_requested and hasattr(ort, "preload_dlls"):
+        # Also support NVIDIA runtime wheels without requiring PyTorch.
+        ort.preload_dlls()
     # Keep provider diagnostics in the API log, without enabling verbose ORT tracing.
     try:
         ort.set_default_logger_severity_level(3)  # 3 = ERROR

@@ -161,12 +161,39 @@ docker compose down -v
 
 ## 本地开发运行
 
+本机使用 Anaconda（`C:\python\Anaconda3-2024.10-1-Windows-x86_64`），
+项目独立环境为 `D:\conda_envs\Train`，Python 3.11。VS Code 默认解释器已指向该环境。
+首次重建环境：
+
+```powershell
+conda config --append envs_dirs D:\conda_envs
+conda create --prefix D:\conda_envs\Train python=3.11 pip -y
+conda run -n Train python -m pip install -r backend/requirements-gpu-windows.txt
+conda run -n Train python scripts/check-onnx-gpu.py
+```
+
+Windows 独立 ONNX 环境通过 NVIDIA 的 Python 运行库包提供 CUDA/cuDNN，无需安装 PyTorch。
+运行库固定为 CUDA 12.6 / cuDNN 9.5，安装后必须通过下面的 GPU 验证再启动。
+若本机全局 pip 镜像连接失败，可只对本次 PowerShell 会话设置以下变量，再重新安装：
+
+```powershell
+$env:PIP_CONFIG_FILE = 'nul'
+$env:PIP_INDEX_URL = 'https://pypi.org/simple'
+$env:PIP_EXTRA_INDEX_URL = ' '
+conda run -n Train python -m pip install -r backend/requirements-gpu-windows.txt
+```
+
+后端在创建 GPU 会话前调用 ONNX Runtime 的 `preload_dlls()`，保留 FP32/禁用 TF32 设置。
+验证脚本对 `models/*/model.onnx` 逐一执行合成输入推理，检查输出有限值和 profiling 中实际
+执行的 CUDA 节点，报告及原始 profiling 保存在 `data/gpu-check/`。该检查验证运行能力，不评价识别准确率。
+库加载方式参见 [ONNX Runtime 官方说明](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#preload-dlls)。
+
 ```powershell
 cd vessel_monitoring_platform
 Copy-Item .env.example .env
 
-# GPU 环境（本机 Train 环境已有 torch 时通常选择此项）
-conda run -n Train python -m pip install -r backend/requirements-gpu.txt
+# Windows GPU 环境（包含独立 CUDA/cuDNN 运行库）
+conda run -n Train python -m pip install -r backend/requirements-gpu-windows.txt
 
 # 或 CPU 环境
 # conda run -n Train python -m pip install -r backend/requirements-cpu.txt
@@ -175,6 +202,9 @@ cd frontend
 npm ci
 cd ..
 ```
+
+通过 GPU 验证后，将本机 `.env` 中的 `DEVICE=cpu` 改为 `DEVICE=cuda`，保持
+`DEMO_MODE=false`，以使用上述真实模型。仅离线分析时可以留空摄像头地址。
 
 启动脚本会同时启动 FastAPI（8010）和 Vite 前端（5173）。不需要先执行 `conda activate Train`；脚本会用指定的 Conda 环境启动后端。默认会从 `CONDA_EXE` 或系统 `PATH` 查找 `conda.exe`：
 
@@ -185,7 +215,7 @@ cd ..
 若 Conda 未加入 PATH，显式传入路径即可：
 
 ```powershell
-.\scripts\start-dev.ps1 -CondaExe "D:\app\miniconda3\Scripts\conda.exe" -Environment Train
+.\scripts\start-dev.ps1 -CondaExe "C:\python\Anaconda3-2024.10-1-Windows-x86_64\Scripts\conda.exe" -Environment Train
 ```
 
 开发地址为前端 http://127.0.0.1:5173、API 文档 http://127.0.0.1:8010/api/docs。状态检查、停止和重新启动：
@@ -195,7 +225,7 @@ cd ..
 .\scripts\stop-dev.ps1
 
 # 需要重新启动时：先停止，再启动
-.\scripts\start-dev.ps1 -CondaExe "D:\app\miniconda3\Scripts\conda.exe" -Environment Train
+.\scripts\start-dev.ps1 -CondaExe "C:\python\Anaconda3-2024.10-1-Windows-x86_64\Scripts\conda.exe" -Environment Train
 ```
 
 停止脚本不需要激活 Conda 环境。即使服务是手动启动的，或 `data/logs/dev-processes.json` 丢失，也会检查 8010、5173 端口并停止已确认的平台进程；无法识别的进程会保留并提示。重复执行停止脚本会提示服务已停止。
@@ -269,10 +299,10 @@ CAMERA_ONVIF_ZOOM_TOLERANCE=0.005
 以下命令使用项目真实船体检测模型，对提供的片段采样检测、估计背景运动并回放选船与倍率决策。所有 Python 命令使用 `Train`：
 
 ```powershell
-& 'D:\app\miniconda3\envs\Train\python.exe' backend/scripts/simulate_adaptive_monitor.py --input assets/20251211082541.mp4 --output data/adaptive-scene --sample-fps 4
+conda run -n Train python backend/scripts/simulate_adaptive_monitor.py --input assets/20251211082541.mp4 --output data/adaptive-scene --sample-fps 4
 
 # 调整策略后复用真实检测缓存，避免重复模型推理。
-& 'D:\app\miniconda3\envs\Train\python.exe' backend/scripts/simulate_adaptive_monitor.py --input assets/20251211082541.mp4 --output data/adaptive-scene --sample-fps 4 --reuse-detections
+conda run -n Train python backend/scripts/simulate_adaptive_monitor.py --input assets/20251211082541.mp4 --output data/adaptive-scene --sample-fps 4 --reuse-detections
 ```
 
 可传 `--settings path.json` 指定策略，`--calibrated-factors 1,2,3,4,6,8` 指定模拟可用档位，或使用 `--detect-only` 仅建立检测缓存。输出目录包含 `contactsheet.jpg`、`detections.jsonl`、`detection-source.json`、`decisions.jsonl`、`strategy-replay.mp4` 和 `report.json`。策略视频在原画面上标注目标、静止状态与建议倍率；它不驱动摄像头，不模拟真实光学画质提升。
@@ -282,7 +312,7 @@ CAMERA_ONVIF_ZOOM_TOLERANCE=0.005
 进一步使用同一真实检测缓存运行完整的录制状态机，采用隔离输出目录和模拟镜头，不操作实物摄像头：
 
 ```powershell
-& 'D:\app\miniconda3\envs\Train\python.exe' backend/scripts/simulate_optical_cycles.py --input assets/20251211082541.mp4 --detections data/adaptive-scene/detections.jsonl --output data/adaptive-cycle-run --sample-fps 4
+conda run -n Train python backend/scripts/simulate_optical_cycles.py --input assets/20251211082541.mp4 --detections data/adaptive-scene/detections.jsonl --output data/adaptive-cycle-run --sample-fps 4
 ```
 
 输出包括 `simulation.mp4`、`summary.json`、`timeline.json` 和 `passages/` 中的单轮录像。模拟放大画面是数字裁剪，检测框从真实原画面检测几何投影而来，没有重新对放大图推理。示例验收中约 2.75 秒锁定前景红船并选择相对输入画面的 2×，14.68 秒因船高增长降低至 1×；原片结束时船尾仍未离场，保存的 23.75 秒片段正确标记为中断，不能计为一次自然完成的过境。默认 15 秒静止阈值在该短片中未积累足够有效证据，5/8 秒诊断中的静止标记也只是候选，不是实际停泊真值。
@@ -314,8 +344,8 @@ CAMERA_ONVIF_ZOOM_TOLERANCE=0.005
 首次接入可使用本机配置工具，使用项目的 `Train` 解释器运行：
 
 ```powershell
-& 'D:\app\miniconda3\envs\Train\python.exe' .\scripts\configure-camera.py --credentials-only
-& 'D:\app\miniconda3\envs\Train\python.exe' .\scripts\configure-camera.py --discover
+conda run -n Train python .\scripts\configure-camera.py --credentials-only
+conda run -n Train python .\scripts\configure-camera.py --discover
 ```
 
 第一个命令打开本机窗口填写设备 IP、HTTP/RTSP 端口和账号密码；第二个命令读取设备实际声明的 ONVIF 服务地址、媒体 Profile、视频源和 PTZ 配置标识，并取得主码流 URI。密码只保存到 Git 忽略的本机 `.env`；发现报告、首次配置前的备份保存在 `data/camera-setup/`，终端输出不包含密码或带凭据的取流地址。默认入口为设备的 `/onvif/device_service`，其他入口可在 `.env` 的 `CAMERA_ONVIF_DEVICE_URL` 中明确指定。设备返回不同主机的服务或流地址时拒绝发送凭据，不跟随重定向。

@@ -1,0 +1,11 @@
+# Standalone ONNX inference; no PyTorch or system CUDA Toolkit required.
+-r requirements-gpu.txt
+onnxruntime-gpu[cuda,cudnn]==1.26.0
+# Match this machine's driver 560.94 (CUDA 12.6); avoid newer runtime wheels.
+nvidia-cuda-runtime-cu12==12.6.77
+nvidia-cuda-nvrtc-cu12==12.6.85
+nvidia-cublas-cu12==12.6.4.1
+nvidia-cudnn-cu12==9.5.1.17
+nvidia-cufft-cu12==11.3.0.4
+nvidia-curand-cu12==10.3.7.77
+nvidia-nvjitlink-cu12==12.6.85
