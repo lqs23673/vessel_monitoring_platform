@@ -41,7 +41,7 @@ function Find-Conda {
 
 function Stop-Platform {
     if (Test-PlatformApi) {
-        Write-Host "正在停止采集，等待当前录像保存……"
+        Write-Host "正在停止采集，等待当前录像保存及镜头归位……"
         $null = Invoke-RestMethod "$ApiUrl/api/realtime/camera/stop" -Method Post -TimeoutSec 15
         $null = Invoke-RestMethod "$ApiUrl/api/realtime/local-video/stop" -Method Post -TimeoutSec 15
         $deadline = (Get-Date).AddSeconds(120)
@@ -55,9 +55,10 @@ function Stop-Platform {
                 $pending += @($list.items | Where-Object { $_.status -in @("recording", "processing") }).Count
                 $pageNumber++
             } while (($pageNumber - 1) * 100 -lt $list.total)
-            if (-not $recording.active_id -and $pending -eq 0) { $quietChecks++ } else { $quietChecks = 0 }
+            $lensReady = $recording.zoom_driver -ne "optical" -or ($recording.phase -eq "overview" -and $recording.current_zoom_factor -eq 1)
+            if (-not $recording.active_id -and $pending -eq 0 -and $lensReady) { $quietChecks++ } else { $quietChecks = 0 }
             if ($quietChecks -ge 2) { break }
-            if ((Get-Date) -ge $deadline) { throw "录像仍在保存，平台暂未关闭。请稍后再次选择关闭平台。" }
+            if ((Get-Date) -ge $deadline) { throw "录像仍在保存或镜头尚未归位，平台暂未关闭。请稍后再次选择关闭平台。" }
             Start-Sleep -Seconds 1
         } while ($true)
     }
