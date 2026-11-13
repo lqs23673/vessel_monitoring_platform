@@ -1,0 +1,32 @@
+.env
+*.log
+
+# Local datasets, generated results, media assets, and model packages.
+# Only the four README screenshots are versioned under assets/vis/.
+assets/*
+!assets/vis/
+assets/vis/*
+!assets/vis/平台运行界面图3.png
+!assets/vis/平台运行界面图4.png
+!assets/vis/平台运行界面图5.png
+!assets/vis/平台运行界面图6.png
+data/
+models/*
+!models/README.md
+!models/*/
+models/*/*
+!models/*/deploy_config.yaml
+!models/*/delivery_manifest.json
+Competition materials/
+backend/.pytest_tmp/
+backend/.pytest-tmp/
+.pytest-tmp/
+frontend/node_modules/
+frontend/dist/
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+backend/.pytest_cache/
+backend/**/__pycache__/
+**/__pycache__/
+*.py[cod]
