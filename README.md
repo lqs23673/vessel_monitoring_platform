@@ -383,6 +383,19 @@ conda run -n Train python .\scripts\configure-camera.py --discover
 
 自动选择优先采用支持 PTZ 的最高分辨率配置；多个配置分辨率相同时会列出候选 Token，需要使用 `--profile-token` 明确选择从设备读取的主码流 Token。之后重复发现可沿用已保存的选择。该工具只查询设备能力，不移动镜头、不修改摄像头编码参数，也不把设备位置猜算为光学倍率。`CAMERA_ONVIF_ZOOM_CALIBRATION` 仍须通过实际镜头倍率与位置反馈标定。
 
+本机在 2026-11-13 接入 `192.168.1.108`，采用 ONVIF + RTSP/TCP 网络取流。
+已验证主配置 `MediaProfile000`（H.264、1280×720、25 FPS），并连续收到真实画面及 GPU 模式下的
+`camera_frame` 推理消息。该设备另有同分辨率的辅助配置，首次发现时应明确选择主配置：
+
+```powershell
+conda run -n Train python scripts/configure-camera.py --discover --profile-token MediaProfile000
+```
+
+该设备通过视频库报告的 FPS 为 100，实际编码声明为 25；本机已配置 `LIVE_CAPTURE_FPS_OVERRIDE=25`。
+私有取流地址、账号密码保存在 `.env`，接入发现与实时验收记录分别保存在
+`data/camera-setup/status.json`、`data/camera-setup/live-validation.json`，均不提交到 Git。
+本次仅启用实时采集与推理，自动录像保持关闭。重新启动后端后，需要在实时监测页再次点击“启动摄像头采集”。
+
 远程链路可使用 EasyTier：两台电脑加入同一私有组网，仅在现场电脑发布摄像头地址的 `/32` 子网代理。先在运行后端的电脑验证 HTTP 和 RTSP 可达，再运行上述工具。RTSP 使用 `OPENCV_FFMPEG_CAPTURE_OPTIONS=rtsp_transport;tcp`；设备返回的编码帧率会写入 `LIVE_CAPTURE_FPS_OVERRIDE`，避免部分相机 RTSP 声明 100 fps、实际编码 25 fps 时生成不必要的重复帧。值为 `0` 时沿用源帧率，`LIVE_CAPTURE_FPS` 仍只作无效帧率的后备值。
 
 完成配置后重启 API，在实时监测页启动摄像头采集并检查镜头能力。开启自动光学循环前需确认真实倍率标定已完成。服务重启会结束当前采集会话；启动后重新点击“启动摄像头采集”。也可以手动填写 `.env`：
