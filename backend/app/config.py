@@ -64,6 +64,7 @@ class Settings:
     live_stream_protocol: str = os.getenv("LIVE_STREAM_PROTOCOL", "HTTP-FLV")
     # Private server-side source; never included in browser/API responses.
     live_capture_url: str = os.getenv("LIVE_CAPTURE_URL", "").strip()
+    live_capture_autostart: bool = _env_bool("LIVE_CAPTURE_AUTOSTART", False)
     live_capture_frame_step: int = max(1, int(os.getenv("LIVE_CAPTURE_FRAME_STEP", "3")))
     live_capture_fps: float = max(1.0, min(120.0, float(os.getenv("LIVE_CAPTURE_FPS", "25"))))
     # Explicit override for cameras whose RTSP metadata reports an incorrect FPS.

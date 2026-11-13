@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .api import router, shutdown_realtime
+from .api import router, shutdown_realtime, start_camera
+from .config import get_settings
+from .live_capture import safe_camera_error
 from .database import Base, engine
 from .jobs import job_manager
 from .recording_api import router as recording_router
@@ -16,6 +19,14 @@ async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
     job_manager.start()
     try:
+        if get_settings().live_capture_autostart:
+            try:
+                await start_camera()
+            except Exception as exc:
+                # Keep settings and diagnostics accessible if capture cannot start.
+                logging.getLogger("vessel.startup").error(
+                    "Camera autostart failed: %s", safe_camera_error(exc, get_settings())
+                )
         yield
     finally:
         await shutdown_realtime()
