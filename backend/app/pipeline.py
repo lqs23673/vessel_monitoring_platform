@@ -14,6 +14,7 @@ from .inference.frame_inference import FrameInferenceService
 from .database import ResultRepository
 from .storage import ResultStorage
 from .tracking import InstanceAggregator
+from .image_io import read_image
 
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".webp"}
 VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv", ".m4v", ".wmv", ".flv", ".ts"}
@@ -66,7 +67,7 @@ class Pipeline:
 
     def _image(self, source: Path, source_filename: str, ordinal: int, task: TaskKind, visualize: bool, progress, cancelled) -> dict:
         self._check_cancelled(cancelled)
-        frame = cv2.imread(str(source))
+        frame = read_image(source)
         if frame is None:
             raise ValueError(f"unable to read image: {source.name}")
         result = self.frame_inference.infer(frame, task_id=self.storage.task_id, source_filename=source_filename, task=task, observed_at=datetime.now(timezone.utc))

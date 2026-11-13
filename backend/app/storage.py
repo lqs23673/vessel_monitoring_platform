@@ -15,6 +15,7 @@ import cv2
 import numpy as np
 
 from .schemas import FrameResultV2, InstanceResultV2, TaskKind
+from .image_io import write_image
 
 
 def _safe_stem(filename: str) -> str:
@@ -105,7 +106,7 @@ class ResultStorage:
 
     def write_image_visualization(self, stem: str, frame: np.ndarray) -> Path:
         path = self.directory / f"{stem}_vis.jpg"
-        if not cv2.imwrite(str(path), frame):
+        if not write_image(path, frame):
             raise RuntimeError(f"unable to write visualization {path}")
         return path
 

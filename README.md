@@ -159,28 +159,41 @@ docker compose down -v
 
 运行数据位于项目目录的 `data/`；MySQL 与 Redis 使用 Docker volume。生产环境请定期备份两者，并使用反向代理/TLS 保护对外端口。
 
-## 本地开发运行
+## 本机 GPU 部署与运行
 
 本机使用 Anaconda（`C:\python\Anaconda3-2024.10-1-Windows-x86_64`），
 项目独立环境为 `D:\conda_envs\Train`，Python 3.11。VS Code 默认解释器已指向该环境。
+本机复用现有 CUDA 12 / cuDNN 9 DLL 和 FFmpeg，仅安装平台推理所需的 Python 包。
+`Train` 不安装 PyTorch、CUDA Toolkit、pytest 或 MySQL 服务；数据库使用 SQLite，Redis 服务为可选项。
 首次重建环境：
 
 ```powershell
 conda config --append envs_dirs D:\conda_envs
 conda create --prefix D:\conda_envs\Train python=3.11 pip -y
-conda run -n Train python -m pip install -r backend/requirements-gpu-windows.txt
-conda run -n Train python scripts/check-onnx-gpu.py
+conda run -n Train python -m pip install -r backend/requirements-deploy.txt
 ```
 
-Windows 独立 ONNX 环境通过 NVIDIA 的 Python 运行库包提供 CUDA/cuDNN，无需安装 PyTorch。
-运行库固定为 CUDA 12.6 / cuDNN 9.5，安装后必须通过下面的 GPU 验证再启动。
+本机 `.env`（Git 忽略）使用以下设置。CUDA DLL 目录仅用于读取已有运行库，不导入该目录所属环境的 PyTorch：
+
+```dotenv
+APP_ENV=production
+DEVICE=cuda
+DEMO_MODE=false
+DATABASE_URL=sqlite:///./data/vessel_monitor.db
+ONNX_CUDA_DLL_DIR=D:/conda_envs/yolov11_env/Lib/site-packages/torch/lib
+FFMPEG_BIN_DIR=C:/python/Anaconda3-2024.10-1-Windows-x86_64/envs/yolov8/Library/bin
+```
+
+保留上述两个运行库目录；迁移或删除它们后，需要更新 `.env`。
+其他机器没有可复用 DLL 时，才使用 `backend/requirements-gpu-windows.txt` 安装 NVIDIA 运行库，
+并留空 `ONNX_CUDA_DLL_DIR`；须按目标驱动确认兼容性。
 若本机全局 pip 镜像连接失败，可只对本次 PowerShell 会话设置以下变量，再重新安装：
 
 ```powershell
 $env:PIP_CONFIG_FILE = 'nul'
 $env:PIP_INDEX_URL = 'https://pypi.org/simple'
 $env:PIP_EXTRA_INDEX_URL = ' '
-conda run -n Train python -m pip install -r backend/requirements-gpu-windows.txt
+conda run -n Train python -m pip install -r backend/requirements-deploy.txt
 ```
 
 后端在创建 GPU 会话前调用 ONNX Runtime 的 `preload_dlls()`，保留 FP32/禁用 TF32 设置。
@@ -188,12 +201,24 @@ conda run -n Train python -m pip install -r backend/requirements-gpu-windows.txt
 执行的 CUDA 节点，报告及原始 profiling 保存在 `data/gpu-check/`。该检查验证运行能力，不评价识别准确率。
 库加载方式参见 [ONNX Runtime 官方说明](https://onnxruntime.ai/docs/execution-providers/CUDA-ExecutionProvider.html#preload-dlls)。
 
+完成 `.env` 设置后验证真实模型的 GPU 执行：
+
+```powershell
+conda run -n Train python scripts/check-onnx-gpu.py
+```
+
+启动后可运行 `conda run -n Train python scripts/check-deployment.py`，检查页面、API 代理、
+WebSocket、FFmpeg H.264、四种图片任务和带跟踪的视频任务。该检查会提交 5 个合成输入任务，
+报告保存在 `data/deployment-check/report.json`；不用于评价模型准确率。
+`backend/requirements-deploy.lock.txt` 保存本次部署验证的精确 Python 包版本，重建同机环境时可直接安装该文件。
+
 ```powershell
 cd vessel_monitoring_platform
-Copy-Item .env.example .env
+# 仅首次配置时复制；已有 .env 时保留本机设置
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
 
-# Windows GPU 环境（包含独立 CUDA/cuDNN 运行库）
-conda run -n Train python -m pip install -r backend/requirements-gpu-windows.txt
+# 本机最小部署依赖（复用上文的 CUDA/cuDNN 运行库）
+conda run -n Train python -m pip install -r backend/requirements-deploy.txt
 
 # 或 CPU 环境
 # conda run -n Train python -m pip install -r backend/requirements-cpu.txt
@@ -203,13 +228,19 @@ npm ci
 cd ..
 ```
 
-通过 GPU 验证后，将本机 `.env` 中的 `DEVICE=cpu` 改为 `DEVICE=cuda`，保持
-`DEMO_MODE=false`，以使用上述真实模型。仅离线分析时可以留空摄像头地址。
+本机 `.env` 已使用 `DEVICE=cuda` 和 `DEMO_MODE=false`。从模板重建时需应用上文的 GPU 设置。
+仅离线分析时可以留空摄像头地址。
 
 启动脚本会同时启动 FastAPI（8010）和 Vite 前端（5173）。不需要先执行 `conda activate Train`；脚本会用指定的 Conda 环境启动后端。默认会从 `CONDA_EXE` 或系统 `PATH` 查找 `conda.exe`：
 
 ```powershell
 .\scripts\start-dev.ps1 -Environment Train
+```
+
+当前电脑如提示脚本未签名，可以仅对本次启动使用：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/start-dev.ps1 -CondaExe "C:\python\Anaconda3-2024.10-1-Windows-x86_64\Scripts\conda.exe" -Environment Train
 ```
 
 若 Conda 未加入 PATH，显式传入路径即可：

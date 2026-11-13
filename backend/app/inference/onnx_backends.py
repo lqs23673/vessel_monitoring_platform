@@ -17,6 +17,7 @@ from typing import Any
 import cv2
 import numpy as np
 import yaml
+from ..image_io import read_image
 
 logger = logging.getLogger("vessel.inference.onnx")
 _DLL_DIRECTORY_HANDLES: list[Any] = []
@@ -78,6 +79,8 @@ def _register_torch_cuda_libraries() -> None:
     """Expose PyTorch's bundled CUDA DLLs to ONNX Runtime on Windows."""
     if sys.platform != "win32" or not hasattr(os, "add_dll_directory"):
         return
+    if os.getenv("ONNX_CUDA_DLL_DIR", "").strip():
+        return
     try:
         import torch
 
@@ -88,7 +91,21 @@ def _register_torch_cuda_libraries() -> None:
         logger.debug("Unable to register PyTorch CUDA library directory: %s", exc)
 
 
-def _create_session(onnx_path: Path, device: str):
+def _preload_cuda_libraries(ort) -> None:
+    """Reuse a local CUDA runtime directory without importing a training framework."""
+    directory = os.getenv("ONNX_CUDA_DLL_DIR", "").strip()
+    if directory:
+        path = Path(directory).expanduser().resolve()
+        if not path.is_dir():
+            raise FileNotFoundError(f"ONNX_CUDA_DLL_DIR does not exist: {path}")
+        if sys.platform == "win32" and hasattr(os, "add_dll_directory"):
+            _DLL_DIRECTORY_HANDLES.append(os.add_dll_directory(str(path)))
+        ort.preload_dlls(directory=str(path))
+    else:
+        ort.preload_dlls()
+
+
+def _create_session(onnx_path: Path, device: str, *, profile_file_prefix: Path | None = None):
     providers = _providers(device)
     cuda_requested = providers[0] == "CUDAExecutionProvider"
     if cuda_requested:
@@ -105,7 +122,7 @@ def _create_session(onnx_path: Path, device: str):
         ) from exc
     if cuda_requested and hasattr(ort, "preload_dlls"):
         # Also support NVIDIA runtime wheels without requiring PyTorch.
-        ort.preload_dlls()
+        _preload_cuda_libraries(ort)
     # Keep provider diagnostics in the API log, without enabling verbose ORT tracing.
     try:
         ort.set_default_logger_severity_level(3)  # 3 = ERROR
@@ -114,6 +131,9 @@ def _create_session(onnx_path: Path, device: str):
     so = ort.SessionOptions()
     so.graph_optimization_level = ort.GraphOptimizationLevel.ORT_ENABLE_ALL
     so.log_severity_level = 3
+    if profile_file_prefix is not None:
+        so.enable_profiling = True
+        so.profile_file_prefix = str(profile_file_prefix)
     try:
         session = ort.InferenceSession(
             str(onnx_path), sess_options=so, providers=providers,
@@ -462,7 +482,7 @@ class ONNXDraftFormerPredictor:
         image_path = None
         if isinstance(image_or_path, (str, Path)):
             image_path = str(image_or_path)
-            image = cv2.imread(image_path)
+            image = read_image(image_path)
             if image is None:
                 raise ValueError(f"Failed to read image: {image_path}")
         else:
@@ -695,9 +715,9 @@ class ONNXShipNameRecognizer:
                 images = []
                 for p in sorted(path.iterdir()):
                     if p.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}:
-                        images.append(cv2.cvtColor(cv2.imread(str(p)), cv2.COLOR_BGR2RGB))
+                        images.append(cv2.cvtColor(read_image(p), cv2.COLOR_BGR2RGB))
             else:
-                bgr = cv2.imread(str(path))
+                bgr = read_image(path)
                 images = [cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)]
         else:
             raise ValueError("No input image path or numpy array.")

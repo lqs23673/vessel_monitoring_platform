@@ -15,6 +15,13 @@ from dotenv import load_dotenv
 PLATFORM_ROOT = Path(__file__).resolve().parents[2]
 load_dotenv(PLATFORM_ROOT / ".env")
 
+# Reuse an existing FFmpeg installation for recording on this host.
+_ffmpeg_bin_dir = os.getenv("FFMPEG_BIN_DIR", "").strip()
+if _ffmpeg_bin_dir:
+    if not Path(_ffmpeg_bin_dir).is_dir():
+        raise FileNotFoundError(f"FFMPEG_BIN_DIR does not exist: {_ffmpeg_bin_dir}")
+    os.environ["PATH"] = _ffmpeg_bin_dir + os.pathsep + os.environ.get("PATH", "")
+
 
 def _env_bool(name: str, default: bool) -> bool:
     return os.getenv(name, str(default)).strip().lower() in {"1", "true", "yes", "on"}

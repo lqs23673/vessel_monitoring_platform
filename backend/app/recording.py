@@ -25,6 +25,7 @@ import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .config import get_settings
+from .image_io import write_image
 from .optical_recording import OpticalCycleMixin
 from .monitoring_audit import record_event
 
@@ -374,7 +375,7 @@ class RecordingManager(OpticalCycleMixin):
         self.active = {"id": recording_id, "writer": writer, "start": start, "fps": fps, "frames": 0, "shape": image.shape[:2], "previous": None, "previous_focus": None, "persisted_at": time.monotonic()}
         record_event("recording_started", recording_id=recording_id, camera_id=self.camera_id,
             session_id=self.session_id, recording_mode=item["recording_mode"])
-        if not cv2.imwrite(str(directory / "thumbnail.jpg"), cv2.resize(image, (480, max(2, round(image.shape[0] * 480 / image.shape[1]))))):
+        if not write_image(directory / "thumbnail.jpg", cv2.resize(image, (480, max(2, round(image.shape[0] * 480 / image.shape[1]))))):
             raise RuntimeError("cannot save thumbnail")
 
     def _write_frame(self, image: np.ndarray, timestamp: float):

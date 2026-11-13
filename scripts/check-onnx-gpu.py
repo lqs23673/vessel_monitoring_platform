@@ -9,15 +9,19 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "backend"))
 os.environ["NVIDIA_TF32_OVERRIDE"] = "0"
 
 import numpy as np
 import onnxruntime as ort
 import yaml
+from app.config import get_settings
+from app.inference.onnx_backends import _create_session
 
 
 def main() -> None:
-    ort.preload_dlls()
+    if get_settings().device.lower() not in {"cuda", "cuda:0", "gpu"}:
+        raise RuntimeError("Set DEVICE=cuda in .env before validating this deployment")
     destination = ROOT / "data" / "gpu-check"
     destination.mkdir(parents=True, exist_ok=True)
     models = sorted((ROOT / "models").glob("*/model.onnx"))
@@ -27,15 +31,7 @@ def main() -> None:
     for model in models:
         config = yaml.safe_load(model.with_name("deploy_config.yaml").read_text(encoding="utf-8"))
         width, height = config["input"]["image_size_wh"]
-        options = ort.SessionOptions()
-        options.enable_profiling = True
-        options.profile_file_prefix = str(destination / model.parent.name)
-        options.log_severity_level = 3
-        session = ort.InferenceSession(
-            str(model), sess_options=options,
-            providers=["CUDAExecutionProvider", "CPUExecutionProvider"],
-            provider_options=[{"use_tf32": "0"}, {}],
-        )
+        session = _create_session(model, "cuda", profile_file_prefix=destination / model.parent.name)
         if "CUDAExecutionProvider" not in session.get_providers():
             raise RuntimeError(f"CUDA provider missing: {model}")
         image = np.random.default_rng(0).random((1, 3, height, width), dtype=np.float32)

@@ -37,12 +37,12 @@ foreach ($port in @(8010, 5173)) {
     }
 }
 
-$api = Start-Process -FilePath $CondaExe -ArgumentList @("run", "-n", $Environment, "python", "run.py") -WorkingDirectory $BackendRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $LogRoot "api.log") -RedirectStandardError (Join-Path $LogRoot "api.error.log") -PassThru
+$api = Start-Process -FilePath $CondaExe -ArgumentList @("run", "--no-capture-output", "-n", $Environment, "python", "run.py") -WorkingDirectory $BackendRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $LogRoot "api.log") -RedirectStandardError (Join-Path $LogRoot "api.error.log") -PassThru
 $web = Start-Process -FilePath "npm.cmd" -ArgumentList @("run", "dev") -WorkingDirectory $FrontendRoot -WindowStyle Hidden -RedirectStandardOutput (Join-Path $LogRoot "web.log") -RedirectStandardError (Join-Path $LogRoot "web.error.log") -PassThru
 
 @{ api = $api.Id; web = $web.Id; started_at = (Get-Date).ToString("o") } | ConvertTo-Json | Set-Content -Encoding utf8 $ProcessFile
 
-$deadline = (Get-Date).AddSeconds(30)
+$deadline = (Get-Date).AddSeconds(90)
 do {
     Start-Sleep -Milliseconds 500
     $apiReady = Get-NetTCPConnection -State Listen -LocalPort 8010 -ErrorAction SilentlyContinue
